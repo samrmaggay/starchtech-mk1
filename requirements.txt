@@ -1,4 +1,4 @@
 openpyxl
 ofxparse
 qifparse
---pre odoo12-addon-mis_builder
+odoo12-addon-mis_builder==12.0.4.0.5
