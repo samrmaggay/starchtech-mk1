@@ -1,4 +1,5 @@
 openpyxl
 ofxparse
 qifparse
-odoo12-addon-mis_builder==12.0.4.0.5
+defusedxml
+authlib>=1.6.12,<1.7.0
