@@ -1,29 +1,20 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 import logging
 from collections import OrderedDict, defaultdict
 
-from openerp import _
-from openerp.exceptions import UserError
+from odoo.exceptions import UserError
 
 from .accounting_none import AccountingNone
 from .mis_kpi_data import ACC_SUM
 from .mis_safe_eval import DataError, mis_safe_eval
 from .simple_array import SimpleArray
 
-try:
-    import itertools.izip as zip
-except ImportError:
-    pass  # python 3
-
-
 _logger = logging.getLogger(__name__)
 
 
-class KpiMatrixRow(object):
-
+class KpiMatrixRow:
     # TODO: ultimately, the kpi matrix will become ignorant of KPI's and
     #       accounts and know about rows, columns, sub columns and styles only.
     #       It is already ignorant of period and only knowns about columns.
@@ -51,13 +42,6 @@ class KpiMatrixRow(object):
         else:
             return self._matrix.get_account_name(self.account_id)
 
-    @property
-    def row_id(self):
-        if not self.account_id:
-            return self.kpi.name
-        else:
-            return "{}:{}".format(self.kpi.name, self.account_id)
-
     def iter_cell_tuples(self, cols=None):
         if cols is None:
             cols = self._matrix.iter_cols()
@@ -77,7 +61,7 @@ class KpiMatrixRow(object):
         return True
 
 
-class KpiMatrixCol(object):
+class KpiMatrixCol:
     def __init__(self, key, label, description, locals_dict, subkpis):
         self.key = key
         self.label = label
@@ -108,7 +92,7 @@ class KpiMatrixCol(object):
         return self._cell_tuples_by_row.get(row)
 
 
-class KpiMatrixSubCol(object):
+class KpiMatrixSubCol:
     def __init__(self, col, label, description, index=0):
         self.col = col
         self.label = label
@@ -131,7 +115,7 @@ class KpiMatrixSubCol(object):
         return cell_tuple[self.index]
 
 
-class KpiMatrixCell(object):  # noqa: B903 (immutable data class)
+class KpiMatrixCell:  # noqa: B903 (immutable data class)
     def __init__(
         self,
         row,
@@ -151,16 +135,22 @@ class KpiMatrixCell(object):  # noqa: B903 (immutable data class)
         self.style_props = style_props
         self.drilldown_arg = drilldown_arg
         self.val_type = val_type
+        self.cell_id = KpiMatrix._pack_cell_id(self)
 
 
-class KpiMatrix(object):
-    def __init__(self, env, multi_company=False, account_model="account.account"):
+class KpiMatrix:
+    def __init__(
+        self,
+        env,
+        companies=None,
+        account_model="account.account",
+    ):
         # cache language id for faster rendering
         lang_model = env["res.lang"]
-        lang_id = lang_model._lang_get(env.user.lang)
-        self.lang = lang_model.browse(lang_id)
+        self.lang = lang_model._lang_get(env.user.lang)
         self._style_model = env["mis.report.style"]
         self._account_model = env[account_model]
+        self._companies = companies
         # data structures
         # { kpi: KpiMatrixRow }
         self._kpi_rows = OrderedDict()
@@ -174,10 +164,9 @@ class KpiMatrix(object):
         self._sum_todo = {}
         # { account_id: account_name }
         self._account_names = {}
-        self._multi_company = multi_company
 
     def declare_kpi(self, kpi):
-        """ Declare a new kpi (row) in the matrix.
+        """Declare a new kpi (row) in the matrix.
 
         Invoke this first for all kpi, in display order.
         """
@@ -185,7 +174,7 @@ class KpiMatrix(object):
         self._detail_rows[kpi] = {}
 
     def declare_col(self, col_key, label, description, locals_dict, subkpis):
-        """ Declare a new column, giving it an identifier (key).
+        """Declare a new column, giving it an identifier (key).
 
         Invoke the declare_* methods in display order.
         """
@@ -196,7 +185,7 @@ class KpiMatrix(object):
     def declare_comparison(
         self, cmpcol_key, col_key, base_col_key, label, description=None
     ):
-        """ Declare a new comparison column.
+        """Declare a new comparison column.
 
         Invoke the declare_* methods in display order.
         """
@@ -206,7 +195,7 @@ class KpiMatrix(object):
     def declare_sum(
         self, sumcol_key, col_to_sum_keys, label, description=None, sum_accdet=False
     ):
-        """ Declare a new summation column.
+        """Declare a new summation column.
 
         Invoke the declare_* methods in display order.
         :param col_to_sum_keys: [(sign, col_key)]
@@ -215,7 +204,7 @@ class KpiMatrix(object):
         self._cols[sumcol_key] = None  # reserve slot in insertion order
 
     def set_values(self, kpi, col_key, vals, drilldown_args, tooltips=True):
-        """ Set values for a kpi and a colum.
+        """Set values for a kpi and a colum.
 
         Invoke this after declaring the kpi and the column.
         """
@@ -226,7 +215,7 @@ class KpiMatrix(object):
     def set_values_detail_account(
         self, kpi, col_key, account_id, vals, drilldown_args, tooltips=True
     ):
-        """ Set values for a kpi and a column and a detail account.
+        """Set values for a kpi and a column and a detail account.
 
         Invoke this after declaring the kpi and the column.
         """
@@ -243,7 +232,9 @@ class KpiMatrix(object):
         cell_tuple = []
         assert len(vals) == col.colspan
         assert len(drilldown_args) == col.colspan
-        for val, drilldown_arg, subcol in zip(vals, drilldown_args, col.iter_subcols()):
+        for val, drilldown_arg, subcol in zip(
+            vals, drilldown_args, col.iter_subcols(), strict=True
+        ):
             if isinstance(val, DataError):
                 val_rendered = val.name
                 val_comment = val.msg
@@ -252,13 +243,12 @@ class KpiMatrix(object):
                     self.lang, row.style_props, kpi.type, val
                 )
                 if row.kpi.multi and subcol.subkpi:
-                    val_comment = u"{}.{} = {}".format(
-                        row.kpi.name,
-                        subcol.subkpi.name,
-                        row.kpi._get_expression_str_for_subkpi(subcol.subkpi),
+                    val_comment = (
+                        f"{row.kpi.name}.{subcol.subkpi.name} = "
+                        f"{row.kpi._get_expression_str_for_subkpi(subcol.subkpi)}"
                     )
                 else:
-                    val_comment = u"{} = {}".format(row.kpi.name, row.kpi.expression)
+                    val_comment = f"{row.kpi.name} = {row.kpi.expression}"
             cell_style_props = row.style_props
             if row.kpi.style_expression:
                 # evaluate style expression
@@ -303,7 +293,7 @@ class KpiMatrix(object):
         return common_subkpis
 
     def compute_comparisons(self):
-        """ Compute comparisons.
+        """Compute comparisons.
 
         Invoke this after setting all values.
         """
@@ -316,12 +306,14 @@ class KpiMatrix(object):
             common_subkpis = self._common_subkpis([col, base_col])
             if (col.subkpis or base_col.subkpis) and not common_subkpis:
                 raise UserError(
-                    _("Columns {} and {} are not comparable").format(
-                        col.description, base_col.description
+                    self.env._(
+                        "Columns %(descr)s and %(base_descr)s are not comparable",
+                        descr=col.description,
+                        base_descr=base_col.description,
                     )
                 )
             if not label:
-                label = u"{} vs {}".format(col.label, base_col.label)
+                label = f"{col.label} vs {base_col.label}"
             comparison_col = KpiMatrixCol(
                 cmpcol_key,
                 label,
@@ -353,7 +345,10 @@ class KpiMatrix(object):
                     ]
                 comparison_cell_tuple = []
                 for val, base_val, comparison_subcol in zip(
-                    vals, base_vals, comparison_col.iter_subcols()
+                    vals,
+                    base_vals,
+                    comparison_col.iter_subcols(),
+                    strict=True,
                 ):
                     # TODO FIXME average factors
                     comparison = self._style_model.compare_and_render(
@@ -382,7 +377,7 @@ class KpiMatrix(object):
                 comparison_col._set_cell_tuple(row, comparison_cell_tuple)
 
     def compute_sums(self):
-        """ Compute comparisons.
+        """Compute comparisons.
 
         Invoke this after setting all values.
         """
@@ -397,11 +392,12 @@ class KpiMatrix(object):
             common_subkpis = self._common_subkpis(sumcols)
             if any(c.subkpis for c in sumcols) and not common_subkpis:
                 raise UserError(
-                    _(
-                        "Sum cannot be computed in column {} "
+                    self.env._(
+                        "Sum cannot be computed in column %s "
                         "because the columns to sum have no "
-                        "common subkpis"
-                    ).format(label)
+                        "common subkpis",
+                        label,
+                    )
                 )
             sum_col = KpiMatrixCol(
                 sumcol_key,
@@ -441,7 +437,7 @@ class KpiMatrix(object):
                 )
 
     def iter_rows(self):
-        """ Iterate rows in display order.
+        """Iterate rows in display order.
 
         yields KpiMatrixRow.
         """
@@ -449,11 +445,10 @@ class KpiMatrix(object):
             yield kpi_row
             detail_rows = self._detail_rows[kpi_row.kpi].values()
             detail_rows = sorted(detail_rows, key=lambda r: r.label)
-            for detail_row in detail_rows:
-                yield detail_row
+            yield from detail_rows
 
     def iter_cols(self):
-        """ Iterate columns in display order.
+        """Iterate columns in display order.
 
         yields KpiMatrixCol: one for each column or comparison.
         """
@@ -461,14 +456,13 @@ class KpiMatrix(object):
             yield col
 
     def iter_subcols(self):
-        """ Iterate sub columns in display order.
+        """Iterate sub columns in display order.
 
         yields KpiMatrixSubCol: one for each subkpi in each column
         and comparison.
         """
         for col in self.iter_cols():
-            for subcol in col.iter_subcols():
-                yield subcol
+            yield from col.iter_subcols()
 
     def _load_account_names(self):
         account_ids = set()
@@ -478,10 +472,34 @@ class KpiMatrix(object):
         self._account_names = {a.id: self._get_account_name(a) for a in accounts}
 
     def _get_account_name(self, account):
-        result = u"{} {}".format(account.code, account.name)
-        if self._multi_company:
-            result = u"{} [{}]".format(result, account.company_id.name)
-        return result
+        # display_name is account code + account name. Note the account may have
+        # no code for the user current active company, in which case only the
+        # name is displayed. It is consistent with other places where accounts
+        # are displayed in Odoo.
+        account_companies = (
+            account.company_ids & self._companies
+            if self._companies
+            else account.company_ids
+        )
+        if len(account_companies) == 1:
+            # When there is no ambiguity on the company, use it to compute the label
+            account_name = account.with_company(account_companies).display_name
+        else:
+            # Otherwise use the default Odoo behaviour to get the account label
+            # (this may return a name without code)
+            account_name = account.display_name
+        is_multi_company = self._companies and len(self._companies) > 1
+        if is_multi_company and len(account_companies) == 1:
+            # In a multi-company report, if the account is bound to one
+            # company, it makes sense to show the company name. If the account
+            # is bound to multiple companies it does not make sense, because we
+            # don't know to which companies this detail line effectively
+            # contributes, so the list of companies in it would not add useful
+            # information. To be able to accurately display the company on
+            # detail lines when the account is bound to multiple companies,
+            # we'll need a generalized kpi details expansion.
+            account_name = f"{account_name} [{account_companies.display_name}]"
+        return account_name
 
     def get_account_name(self, account_id):
         if account_id not in self._account_names:
@@ -514,8 +532,6 @@ class KpiMatrix(object):
             ) or row.style_props.hide_always:
                 continue
             row_data = {
-                "row_id": row.row_id,
-                "parent_row_id": (row.parent_row and row.parent_row.row_id or None),
                 "label": row.label,
                 "description": row.description,
                 "style": self._style_model.to_css_style(row.style_props),
@@ -531,12 +547,15 @@ class KpiMatrix(object):
                     else:
                         val = cell.val
                     col_data = {
+                        "cell_id": cell.cell_id,
                         "val": val,
                         "val_r": cell.val_rendered,
                         "val_c": cell.val_comment,
                         "style": self._style_model.to_css_style(
                             cell.style_props, no_indent=True
                         ),
+                        # notes can not be added on 'details by account' lines
+                        "can_be_annotated": not cell.row.account_id,
                     }
                     if cell.drilldown_arg:
                         col_data["drilldown_arg"] = cell.drilldown_arg
@@ -544,3 +563,33 @@ class KpiMatrix(object):
             body.append(row_data)
 
         return {"header": header, "body": body}
+
+    # Logic to convert semantic coordinates (period, kpi, subkpi)
+    # to visual coordinates (cell id) and back. The rendering logic musn't know
+    # about semantic concepts such as periods and kpis. Having these well identified
+    # methods allow us to easily spot where the conversion between the rendering and
+    # semantic domain occur.
+
+    @classmethod
+    def _make_cell_id(
+        cls, kpi_id: int, account_id: int | None, period_id: int, subkpi_id: int | None
+    ) -> str:
+        return f"{kpi_id}#{account_id or ''}#{period_id}#{subkpi_id or ''}"
+
+    @classmethod
+    def _pack_cell_id(cls, cell: KpiMatrixCell) -> str:
+        return cls._make_cell_id(
+            cell.row.kpi.id,
+            cell.row.account_id,
+            cell.subcol.col.key,
+            cell.subcol.subkpi and cell.subcol.subkpi.id,
+        )
+
+    @classmethod
+    def _unpack_cell_id(cls, cell_id: str) -> tuple[int, int | None, int, int | None]:
+        kpi_id, account_id, col_key, subkpi_id = cell_id.split("#")
+        kpi_id = int(kpi_id)
+        account_id = int(account_id) if account_id else None
+        period_id = int(col_key)
+        subkpi_id = int(subkpi_id) if subkpi_id else None
+        return kpi_id, account_id, period_id, subkpi_id

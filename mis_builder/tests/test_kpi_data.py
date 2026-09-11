@@ -1,27 +1,24 @@
-# -*- coding: utf-8 -*-
-# Copyright 2017-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2017 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
-from openerp import models
-from openerp.tests.common import SavepointCase
+from odoo.orm.model_classes import add_to_registry
+from odoo.tests.common import TransactionCase
 
 from ..models.mis_kpi_data import ACC_AVG, ACC_SUM
-from .common import init_test_model
 
 
-class TestKpiData(SavepointCase):
-
-    # pylint: disable=missing-return
+class TestKpiData(TransactionCase):
     @classmethod
     def setUpClass(cls):
-        super(TestKpiData, cls).setUpClass()
+        super().setUpClass()
 
-        class MisKpiDataTestItem(models.Model):
+        from .fake_models import MisKpiDataTestItem
 
-            _name = "mis.kpi.data.test.item"
-            _inherit = "mis.kpi.data"
-
-        init_test_model(cls.env, MisKpiDataTestItem)
+        add_to_registry(cls.registry, MisKpiDataTestItem)
+        model_name = "mis.kpi.data.test.item"
+        cls.registry._setup_models__(cls.env.cr, [model_name])
+        cls.registry.init_models(cls.env.cr, [model_name], {"models_to_check": True})
+        cls.addClassCleanup(cls.registry.__delitem__, model_name)
 
         report = cls.env["mis.report"].create(dict(name="test report"))
         cls.kpi1 = cls.env["mis.report.kpi"].create(

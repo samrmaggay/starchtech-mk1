@@ -1,29 +1,29 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2020 CorporateHub (https://corporatehub.eu)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 from lxml import etree
-from openerp import api, fields, models
+
+from odoo import api, fields, models
 
 
 class AddMisReportInstanceDashboard(models.TransientModel):
     _name = "add.mis.report.instance.dashboard.wizard"
     _description = "MIS Report Add to Dashboard Wizard"
 
-    name = fields.Char("Name", size=32, required=True)
+    name = fields.Char(required=True)
 
     dashboard_id = fields.Many2one(
         "ir.actions.act_window",
-        string="Dashboard",
         required=True,
-        domain="[('res_model', '=', " "'board.board')]",
+        domain="[('res_model', '=', 'board.board')]",
     )
 
     @api.model
-    def default_get(self, fields):  # pylint: disable=redefined-outer-name
+    def default_get(self, fields_list):
         res = {}
         if self.env.context.get("active_id", False):
-            res = super(AddMisReportInstanceDashboard, self).default_get(fields)
+            res = super().default_get(fields_list)
             # get report instance name
             res["name"] = (
                 self.env["mis.report.instance"]
@@ -32,13 +32,11 @@ class AddMisReportInstanceDashboard(models.TransientModel):
             )
         return res
 
-    @api.multi
     def action_add_to_dashboard(self):
         active_model = self.env.context.get("active_model")
         assert active_model == "mis.report.instance"
         active_id = self.env.context.get("active_id")
         assert active_id
-        mis_report_instance = self.env[active_model].browse(active_id)
         # create the act_window corresponding to this report
         self.env.ref("mis_builder.mis_report_instance_result_view_form")
         view = self.env.ref("mis_builder.mis_report_instance_result_view_form")
@@ -47,14 +45,14 @@ class AddMisReportInstanceDashboard(models.TransientModel):
             .sudo()
             .create(
                 {
-                    "name": "mis.report.instance.result.view.action.%d"
-                    % self.env.context["active_id"],
+                    "name": f"mis.report.instance.result.view.action."
+                    f"{self.env.context['active_id']}",
                     "res_model": active_model,
                     "res_id": active_id,
                     "target": "current",
                     "view_mode": "form",
                     "view_id": view.id,
-                    "context": mis_report_instance._context_with_filters(),
+                    "context": self.env.context,
                 }
             )
         )
@@ -68,14 +66,17 @@ class AddMisReportInstanceDashboard(models.TransientModel):
         )
         arch = self.dashboard_id.view_id.arch
         if last_customization:
-            arch = self.env["ir.ui.view.custom"].browse(last_customization[0].id).arch
+            arch = last_customization[0].arch
         new_arch = etree.fromstring(arch)
         column = new_arch.xpath("//column")[0]
+        # Due to native dashboard doesn't support form view
+        # add "from_dashboard" to context to get correct views in "get_views"
+        context = dict(self.env.context, from_dashboard=True)
         column.append(
             etree.Element(
                 "action",
                 {
-                    "context": str(self.env.context),
+                    "context": str(context),
                     "name": str(report_result.id),
                     "string": self.name,
                     "view_mode": "form",

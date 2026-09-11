@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
 # Copyright 2016 Thomas Binsfeld
-# Copyright 2016-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2016 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 """
 Provides the AccountingNone singleton.
@@ -102,7 +101,7 @@ True
 __all__ = ["AccountingNone"]
 
 
-class AccountingNoneType(object):
+class AccountingNoneType:
     def __add__(self, other):
         if other is None:
             return AccountingNone
@@ -202,6 +201,9 @@ class AccountingNoneType(object):
 
     def __int__(self):
         return 0
+
+    def __round__(self, ndigits):
+        return 0.0
 
 
 AccountingNone = AccountingNoneType()

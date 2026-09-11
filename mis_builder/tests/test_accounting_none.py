@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
-import doctest
 
 from ..models import accounting_none
+from .common import load_doctests
 
-
-def load_tests(loader, tests, ignore):
-    tests.addTests(doctest.DocTestSuite(accounting_none))
-    return tests
+load_tests = load_doctests(accounting_none)

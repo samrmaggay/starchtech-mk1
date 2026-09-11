@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 
-def _sum(l):
-    """ Same as stdlib sum but returns None instead of 0
+def _sum(lst):
+    """Same as stdlib sum but returns None instead of 0
     in case of empty sequence.
 
     >>> sum([1])
@@ -19,13 +18,13 @@ def _sum(l):
     0
     >>> _sum([])
     """
-    if not l:
+    if not lst:
         return None
-    return sum(l)
+    return sum(lst)
 
 
-def _avg(l):
-    """ Arithmetic mean of a sequence. Returns None in case of empty sequence.
+def _avg(lst):
+    """Arithmetic mean of a sequence. Returns None in case of empty sequence.
 
     >>> _avg([1])
     1.0
@@ -33,13 +32,13 @@ def _avg(l):
     1.5
     >>> _avg([])
     """
-    if not l:
+    if not lst:
         return None
-    return sum(l) / float(len(l))
+    return sum(lst) / float(len(lst))
 
 
 def _min(*args):
-    """ Same as stdlib min but returns None instead of exception
+    """Same as stdlib min but returns None instead of exception
     in case of empty sequence.
 
     >>> min(1, 2)
@@ -65,11 +64,11 @@ def _min(*args):
     >>> min()
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
-    TypeError: min expected 1 arguments, got 0
+    TypeError: min expected at least 1 argument, got 0
     >>> _min()
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
-    TypeError: min expected 1 arguments, got 0
+    TypeError: min expected at least 1 argument, got 0
     >>> min([])
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
@@ -82,7 +81,7 @@ def _min(*args):
 
 
 def _max(*args):
-    """ Same as stdlib max but returns None instead of exception
+    """Same as stdlib max but returns None instead of exception
     in case of empty sequence.
 
     >>> max(1, 2)
@@ -108,11 +107,11 @@ def _max(*args):
     >>> max()
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
-    TypeError: max expected 1 arguments, got 0
+    TypeError: max expected at least 1 argument, got 0
     >>> _max()
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
-    TypeError: max expected 1 arguments, got 0
+    TypeError: max expected at least 1 argument, got 0
     >>> max([])
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?

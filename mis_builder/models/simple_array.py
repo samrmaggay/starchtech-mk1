@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
-""" A trivial immutable array that supports basic arithmetic operations.
+"""A trivial immutable array that supports basic arithmetic operations.
 
 >>> a = SimpleArray((1.0, 2.0, 3.0))
 >>> b = SimpleArray((4.0, 5.0, 6.0))
@@ -84,8 +83,6 @@ Vector((0.5, 1.0))
 2.0 1.0 Vector((2.0, 1.0))
 """
 
-from __future__ import print_function
-
 import itertools
 import operator
 import traceback
@@ -107,7 +104,7 @@ class SimpleArray(tuple):
 
         if isinstance(other, tuple):
             if len(other) != len(self):
-                raise TypeError("tuples must have same length for %s" % op)
+                raise TypeError(f"tuples must have same length for {op}")
             return self.__class__(map(_o2, self, other))
         else:
             return self.__class__(_o2(z, other) for z in self)
@@ -162,11 +159,11 @@ class SimpleArray(tuple):
         return self._cast(other)._op(operator.truediv, self)
 
     def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, tuple.__repr__(self))
+        return f"{self.__class__.__name__}({tuple.__repr__(self)})"
 
 
 def named_simple_array(typename, field_names):
-    """ Return a subclass of SimpleArray, with named properties.
+    """Return a subclass of SimpleArray, with named properties.
 
     This method is to SimpleArray what namedtuple is to tuple.
     It's less sophisticated than namedtuple so some namedtuple

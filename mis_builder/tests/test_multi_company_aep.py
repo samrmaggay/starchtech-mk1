@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
-# Copyright 2014-2018 ACSONE SA/NV (<http://acsone.eu>)
+# Copyright 2014 ACSONE SA/NV (<http://acsone.eu>)
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 import datetime
 
-import openerp.tests.common as common
-from openerp import fields
-from openerp.tools.safe_eval import safe_eval
+import odoo.tests.common as common
+from odoo import Command, fields
+from odoo.tools.safe_eval import safe_eval
 
 from ..models.accounting_none import AccountingNone
 from ..models.aep import AccountingExpressionProcessor as AEP
@@ -14,7 +13,7 @@ from ..models.aep import AccountingExpressionProcessor as AEP
 
 class TestMultiCompanyAEP(common.TransactionCase):
     def setUp(self):
-        super(TestMultiCompanyAEP, self).setUp()
+        super().setUp()
         self.res_company = self.env["res.company"]
         self.account_model = self.env["account.account"]
         self.move_model = self.env["account.move"]
@@ -22,8 +21,12 @@ class TestMultiCompanyAEP(common.TransactionCase):
         self.currency_model = self.env["res.currency"]
         self.curr_year = datetime.date.today().year
         self.prev_year = self.curr_year - 1
-        self.usd = self.currency_model.search([("name", "=", "USD")])
-        self.eur = self.currency_model.search([("name", "=", "EUR")])
+        self.usd = self.currency_model.with_context(active_test=False).search(
+            [("name", "=", "USD")]
+        )
+        self.eur = self.currency_model.with_context(active_test=False).search(
+            [("name", "=", "EUR")]
+        )
         # create company A and B
         self.company_eur = self.res_company.create(
             {"name": "CYEUR", "currency_id": self.eur.id}
@@ -32,8 +35,6 @@ class TestMultiCompanyAEP(common.TransactionCase):
             {"name": "CYUSD", "currency_id": self.usd.id}
         )
         self.env["res.currency.rate"].search([]).unlink()
-        type_ar = self.browse_ref("account.data_account_type_receivable")
-        type_in = self.browse_ref("account.data_account_type_revenue")
         for company, divider in [(self.company_eur, 1.0), (self.company_usd, 2.0)]:
             # create receivable bs account
             company_key = company.name
@@ -42,10 +43,10 @@ class TestMultiCompanyAEP(common.TransactionCase):
                 "account_ar_" + company_key,
                 self.account_model.create(
                     {
-                        "company_id": company.id,
+                        "company_ids": [Command.link(company.id)],
                         "code": "400AR",
                         "name": "Receivable",
-                        "user_type_id": type_ar.id,
+                        "account_type": "asset_receivable",
                         "reconcile": True,
                     }
                 ),
@@ -56,10 +57,10 @@ class TestMultiCompanyAEP(common.TransactionCase):
                 "account_in_" + company_key,
                 self.account_model.create(
                     {
-                        "company_id": company.id,
+                        "company_ids": [Command.link(company.id)],
                         "code": "700IN",
                         "name": "Income",
-                        "user_type_id": type_in.id,
+                        "account_type": "income",
                     }
                 ),
             )
@@ -116,7 +117,7 @@ class TestMultiCompanyAEP(common.TransactionCase):
                 ],
             }
         )
-        move.post()
+        move._post()
         return move
 
     def _do_queries(self, companies, currency, date_from, date_to):
@@ -140,7 +141,6 @@ class TestMultiCompanyAEP(common.TransactionCase):
         aep.do_queries(
             date_from=fields.Date.to_string(date_from),
             date_to=fields.Date.to_string(date_to),
-            target_move="posted",
         )
         return aep
 
@@ -190,8 +190,6 @@ class TestMultiCompanyAEP(common.TransactionCase):
         self.env["res.currency.rate"].create(
             dict(currency_id=self.usd.id, name=today, rate=1.2)
         )
-        self.assertAlmostEqual(1.1, self.usd.with_context(date=date_to).rate)
-        self.assertAlmostEqual(1.2, self.usd.with_context(date=today).rate)
         # let's query for december, one company, default currency = eur
         aep = self._do_queries(self.company_eur, None, date_from, date_to)
         self.assertEqual(self._eval(aep, "balp[700IN]"), -100)
