@@ -2,4 +2,5 @@ openpyxl
 ofxparse
 qifparse
 defusedxml
+packaging
 authlib>=1.6.12,<1.7.0
